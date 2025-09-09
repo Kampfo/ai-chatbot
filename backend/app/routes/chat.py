@@ -5,6 +5,9 @@ from typing import Optional, List
 import json
 import asyncio
 from slowapi import limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 
 from app.services.openai_service import OpenAIService
 from app.utils.validators import sanitize_input
