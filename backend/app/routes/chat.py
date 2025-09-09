@@ -4,10 +4,6 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 import json
 import asyncio
-from slowapi import limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
 
 from app.services.openai_service import OpenAIService
 from app.utils.validators import sanitize_input
@@ -28,7 +24,6 @@ class ChatResponse(BaseModel):
     session_id: str
 
 @router.post("/chat")
-@limiter.limit("20/minute")
 async def chat_endpoint(request: Request, chat_message: ChatMessage):
     """Main chat endpoint"""
     try:
@@ -49,7 +44,6 @@ async def chat_endpoint(request: Request, chat_message: ChatMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/chat/stream")
-@limiter.limit("20/minute")
 async def chat_stream_endpoint(request: Request, chat_message: ChatMessage):
     """Streaming chat endpoint"""
     try:

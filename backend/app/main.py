@@ -2,9 +2,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 import os
 from dotenv import load_dotenv
 
@@ -21,13 +18,6 @@ app = FastAPI(
     docs_url="/api/docs" if os.getenv("ENVIRONMENT") != "production" else None,
     redoc_url=None
 )
-
-# Rate limiting
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
 
 # CORS
 app.add_middleware(
