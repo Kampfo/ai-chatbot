@@ -32,7 +32,11 @@ app.add_middleware(
 app.add_middleware(SecurityMiddleware)
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+app.mount("/static", StaticFiles(directory="/frontend"), name="static")
+
+@app.get("/")
+async def root():
+	return FileResponse("/frontend/index.html")
 
 # Include routers
 app.include_router(chat.router, prefix="/api")
