@@ -31,12 +31,9 @@ app.add_middleware(
 # Security middleware
 app.add_middleware(SecurityMiddleware)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="/frontend"), name="static")
-
-@app.get("/")
-async def root():
-	return FileResponse("/frontend/index.html")
+# Mount static files (CSS, JS, and other assets)
+app.mount("/css", StaticFiles(directory="/frontend/css"), name="css")
+app.mount("/js", StaticFiles(directory="/frontend/js"), name="js")
 
 # Include routers
 app.include_router(chat.router, prefix="/api")
@@ -45,9 +42,9 @@ app.include_router(health.router, prefix="/api")
 @app.get("/")
 async def root():
     """Serve the frontend"""
-    return FileResponse("../frontend/index.html")
+    return FileResponse("/frontend/index.html")
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(_: Request, exc: Exception):
     """Global error handler"""
     return {"error": "An error occurred", "message": str(exc)}
