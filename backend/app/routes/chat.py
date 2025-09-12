@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Optional
 import json
 import asyncio
 
@@ -14,6 +14,7 @@ ai_service = OpenAIService()
 class ChatMessage(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
     
     @validator('message')
     def clean_message(cls, v):
@@ -28,12 +29,13 @@ async def chat_endpoint(request: Request, chat_message: ChatMessage):
     """Main chat endpoint"""
     try:
         # Get or create session
-        session_id = chat_message.session_id or ai_service.create_session()
+        session_id = chat_message.session_id or ai_service.create_session(chat_message.user_id)
         
         # Get AI response
         response = await ai_service.get_response(
             message=chat_message.message,
-            session_id=session_id
+            session_id=session_id,
+            user_id=chat_message.user_id
         )
         
         return ChatResponse(
@@ -47,12 +49,13 @@ async def chat_endpoint(request: Request, chat_message: ChatMessage):
 async def chat_stream_endpoint(request: Request, chat_message: ChatMessage):
     """Streaming chat endpoint"""
     try:
-        session_id = chat_message.session_id or ai_service.create_session()
+        session_id = chat_message.session_id or ai_service.create_session(chat_message.user_id)
         
         async def generate():
             async for chunk in ai_service.get_stream_response(
                 message=chat_message.message,
-                session_id=session_id
+                session_id=session_id,
+                user_id=chat_message.user_id
             ):
                 yield f"data: {json.dumps({'content': chunk, 'session_id': session_id})}\n\n"
         

@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 from dotenv import load_dotenv
+from app.database import Base, engine
 
 from app.routes import chat, health
 from app.middleware.security import SecurityMiddleware
@@ -38,6 +39,11 @@ app.mount("/js", StaticFiles(directory="/frontend/js"), name="js")
 # Include routers
 app.include_router(chat.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 async def root():
