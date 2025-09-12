@@ -1,19 +1,23 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+from typing import Optional
 import json
 import asyncio
 
 from app.services.openai_service import OpenAIService
+from app.services.agent_manager import AgentManager
 from app.utils.validators import sanitize_input
 
 router = APIRouter()
 ai_service = OpenAIService()
+agent_manager = AgentManager()
+agent_manager.register("openai", ai_service, default=True)
 
 class ChatMessage(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = None
+    agent: Optional[str] = Field(None, description="Target agent name")
     
     @validator('message')
     def clean_message(cls, v):
@@ -27,11 +31,13 @@ class ChatResponse(BaseModel):
 async def chat_endpoint(request: Request, chat_message: ChatMessage):
     """Main chat endpoint"""
     try:
-        # Get or create session
-        session_id = chat_message.session_id or ai_service.create_session()
-        
+        # Resolve agent and session
+        agent = agent_manager.get(chat_message.agent)
+        session_id = chat_message.session_id or agent.create_session()
+
         # Get AI response
-        response = await ai_service.get_response(
+        response = await agent_manager.handle_message(
+            chat_message.agent,
             message=chat_message.message,
             session_id=session_id
         )
@@ -47,10 +53,12 @@ async def chat_endpoint(request: Request, chat_message: ChatMessage):
 async def chat_stream_endpoint(request: Request, chat_message: ChatMessage):
     """Streaming chat endpoint"""
     try:
-        session_id = chat_message.session_id or ai_service.create_session()
-        
+        agent = agent_manager.get(chat_message.agent)
+        session_id = chat_message.session_id or agent.create_session()
+
         async def generate():
-            async for chunk in ai_service.get_stream_response(
+            async for chunk in agent_manager.handle_stream(
+                chat_message.agent,
                 message=chat_message.message,
                 session_id=session_id
             ):
