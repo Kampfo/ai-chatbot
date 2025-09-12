@@ -7,6 +7,7 @@ class ChatApp {
         this.charCount = document.getElementById('charCount');
         this.statusElement = document.querySelector('.status-text');
         this.statusDot = document.querySelector('.status-dot');
+        this.agentSelect = document.getElementById('agentSelect');
         
         this.initEventListeners();
         this.checkHealth();
@@ -71,6 +72,8 @@ class ChatApp {
         
         try {
             // Send message to API
+            const agent = this.agentSelect ? this.agentSelect.value : null;
+
             const response = await fetch('/api/chat/stream', {
                 method: 'POST',
                 headers: {
@@ -78,7 +81,8 @@ class ChatApp {
                 },
                 body: JSON.stringify({
                     message: message,
-                    session_id: this.sessionId
+                    session_id: this.sessionId,
+                    agent: agent
                 })
             });
             

@@ -2,10 +2,12 @@ from openai import OpenAI
 import os
 import uuid
 from typing import Dict, List, AsyncGenerator
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
 
-class OpenAIService:
+from .agent import Agent
+
+class OpenAIService(Agent):
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
@@ -48,19 +50,19 @@ class OpenAIService:
         try:
             # Add user message to history
             self.add_message(session_id, "user", message)
-            
+
             # Prepare messages for API
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."}
             ]
-            
+
             # Add conversation history
             for msg in self.get_session_messages(session_id):
                 messages.append({
                     "role": msg["role"],
                     "content": msg["content"]
                 })
-            
+
             # Get response from OpenAI
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -68,17 +70,21 @@ class OpenAIService:
                 temperature=0.7,
                 max_tokens=1000
             )
-            
+
             # Extract response text
             response_text = response.choices[0].message.content
-            
+
             # Add assistant message to history
             self.add_message(session_id, "assistant", response_text)
-            
+
             return response_text
-            
+
         except Exception as e:
             raise Exception(f"OpenAI API error: {str(e)}")
+
+    async def handle_message(self, message: str, session_id: str) -> str:
+        """Implementation of Agent interface"""
+        return await self.get_response(message, session_id)
     
     async def get_stream_response(self, message: str, session_id: str) -> AsyncGenerator[str, None]:
         """Get streaming response from OpenAI"""
