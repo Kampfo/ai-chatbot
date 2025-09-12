@@ -6,7 +6,11 @@ import os
 from dotenv import load_dotenv
 
 from app.routes import chat, health
+from app.routes.chat import limiter
 from app.middleware.security import SecurityMiddleware
+from app.auth import router as auth_router
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 # Load environment variables
 load_dotenv()
@@ -35,9 +39,14 @@ app.add_middleware(SecurityMiddleware)
 app.mount("/css", StaticFiles(directory="/frontend/css"), name="css")
 app.mount("/js", StaticFiles(directory="/frontend/js"), name="js")
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Include routers
 app.include_router(chat.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 @app.get("/")
 async def root():

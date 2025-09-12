@@ -1,19 +1,27 @@
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List
+import os
 import json
 import asyncio
+from typing import Optional
 
+from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+from app.auth import get_current_user
 from app.services.openai_service import OpenAIService
 from app.utils.validators import sanitize_input
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 ai_service = OpenAIService()
+ADMIN_ONLY_AGENTS = {"admin"}
 
 class ChatMessage(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = None
+    agent: Optional[str] = "default"
     
     @validator('message')
     def clean_message(cls, v):
@@ -24,18 +32,20 @@ class ChatResponse(BaseModel):
     session_id: str
 
 @router.post("/chat")
-async def chat_endpoint(request: Request, chat_message: ChatMessage):
+@limiter.limit(os.getenv("RATE_LIMIT", "5/minute"))
+async def chat_endpoint(request: Request, chat_message: ChatMessage, user: dict = Depends(get_current_user)):
     """Main chat endpoint"""
     try:
-        # Get or create session
+        if chat_message.agent in ADMIN_ONLY_AGENTS and not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Not enough privileges")
+
         session_id = chat_message.session_id or ai_service.create_session()
-        
-        # Get AI response
+
         response = await ai_service.get_response(
             message=chat_message.message,
             session_id=session_id
         )
-        
+
         return ChatResponse(
             response=response,
             session_id=session_id
@@ -43,19 +53,24 @@ async def chat_endpoint(request: Request, chat_message: ChatMessage):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/chat/stream")
-async def chat_stream_endpoint(request: Request, chat_message: ChatMessage):
+@limiter.limit(os.getenv("RATE_LIMIT", "5/minute"))
+async def chat_stream_endpoint(request: Request, chat_message: ChatMessage, user: dict = Depends(get_current_user)):
     """Streaming chat endpoint"""
     try:
+        if chat_message.agent in ADMIN_ONLY_AGENTS and not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Not enough privileges")
+
         session_id = chat_message.session_id or ai_service.create_session()
-        
+
         async def generate():
             async for chunk in ai_service.get_stream_response(
                 message=chat_message.message,
                 session_id=session_id
             ):
                 yield f"data: {json.dumps({'content': chunk, 'session_id': session_id})}\n\n"
-        
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
