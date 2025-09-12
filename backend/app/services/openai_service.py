@@ -5,16 +5,19 @@ from typing import Dict, List, AsyncGenerator
 from datetime import datetime, timedelta
 import asyncio
 
+from app.services.event_bus import EventProducer
+
 class OpenAIService:
-    def __init__(self):
+    def __init__(self, producer: EventProducer):
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OpenAI API key not configured")
-        
+
         self.client = OpenAI(api_key=api_key)
         self.sessions: Dict[str, List] = {}
         self.model = "gpt-3.5-turbo"  # Start with 3.5 for cost efficiency
         self.max_context_messages = 10
+        self.producer = producer
     
     def create_session(self) -> str:
         """Create a new chat session"""
@@ -44,23 +47,23 @@ class OpenAIService:
             self.sessions[session_id] = self.sessions[session_id][-self.max_context_messages:]
     
     async def get_response(self, message: str, session_id: str) -> str:
-        """Get response from OpenAI"""
+        """Get response from OpenAI and publish event"""
         try:
             # Add user message to history
             self.add_message(session_id, "user", message)
-            
+
             # Prepare messages for API
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."}
             ]
-            
+
             # Add conversation history
             for msg in self.get_session_messages(session_id):
                 messages.append({
                     "role": msg["role"],
                     "content": msg["content"]
                 })
-            
+
             # Get response from OpenAI
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -68,15 +71,21 @@ class OpenAIService:
                 temperature=0.7,
                 max_tokens=1000
             )
-            
+
             # Extract response text
             response_text = response.choices[0].message.content
-            
+
             # Add assistant message to history
             self.add_message(session_id, "assistant", response_text)
-            
-            return response_text
-            
+
+            # Publish event instead of returning response directly
+            await self.producer.produce("chat_responses", {
+                "session_id": session_id,
+                "response": response_text
+            })
+
+            return "event_published"
+
         except Exception as e:
             raise Exception(f"OpenAI API error: {str(e)}")
     

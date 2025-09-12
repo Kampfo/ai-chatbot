@@ -9,7 +9,15 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENVIRONMENT=development
       - FRONTEND_URL=http://localhost:8000
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend:/app
       - ./frontend:/frontend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
