@@ -20,3 +20,16 @@ Ein production-ready AI Chatbot mit OpenAI Integration, optimiert für Dokploy D
 ```bash
 git clone <your-repo>
 cd ai-chatbot
+```
+
+## Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| OPENAI_API_KEY | OpenAI API key for accessing the language model |
+| SECRET_KEY | Secret key used for JWT token signing |
+| FRONTEND_URL | Allowed CORS origin for the frontend |
+| ACCESS_TOKEN_EXPIRE_MINUTES | (Optional) JWT lifetime in minutes, default is 60 |
+| RATE_LIMIT | (Optional) Rate limit for chat endpoints, e.g. `5/minute` |
+| ADMIN_USERNAME / ADMIN_PASSWORD | (Optional) Credentials for the default admin user |
+| USER_USERNAME / USER_PASSWORD | (Optional) Credentials for a default regular user |
