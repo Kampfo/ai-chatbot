@@ -2,14 +2,20 @@ version: '3.8'
 
 services:
   chatbot:
-    build: ./backend
+    build: .
     ports:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENVIRONMENT=development
       - FRONTEND_URL=http://localhost:8000
+      - DATABASE_URL=sqlite:///./data/chatbot.db
+      - UPLOAD_DIR=/app/data/uploads
     volumes:
       - ./backend:/app
       - ./frontend:/frontend
+      - chatbot_data:/app/data
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  chatbot_data:

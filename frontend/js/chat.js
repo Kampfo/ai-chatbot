@@ -7,24 +7,40 @@ class ChatApp {
         this.charCount = document.getElementById('charCount');
         this.statusElement = document.querySelector('.status-text');
         this.statusDot = document.querySelector('.status-dot');
-        
+        this.uploadButton = document.getElementById('uploadButton');
+        this.fileInput = document.getElementById('fileInput');
+        this.filesSection = document.getElementById('filesSection');
+        this.filesList = document.getElementById('filesList');
+
         this.initEventListeners();
         this.checkHealth();
     }
-    
+
     initEventListeners() {
         this.sendButton.addEventListener('click', () => this.sendMessage());
-        
+
         this.messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 this.sendMessage();
             }
         });
-        
+
         this.messageInput.addEventListener('input', () => {
             const length = this.messageInput.value.length;
             this.charCount.textContent = `${length} / 4000`;
+        });
+
+        // File upload listeners
+        this.uploadButton.addEventListener('click', () => {
+            this.fileInput.click();
+        });
+
+        this.fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.uploadFile(e.target.files[0]);
+                e.target.value = ''; // Reset input
+            }
         });
     }
     
@@ -109,6 +125,8 @@ class ChatApp {
                             
                             if (data.session_id && !this.sessionId) {
                                 this.sessionId = data.session_id;
+                                // Load files for this session
+                                this.loadFiles();
                             }
                             
                             if (data.content) {
@@ -201,9 +219,155 @@ class ChatApp {
     scrollToBottom() {
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }
+
+    async uploadFile(file) {
+        // Validate file
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            this.showError('Bitte nur PDF-Dateien hochladen.');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            this.showError('Datei ist zu groß. Maximum 10MB.');
+            return;
+        }
+
+        // Ensure we have a session ID
+        if (!this.sessionId) {
+            this.sessionId = this.generateSessionId();
+        }
+
+        // Disable upload button
+        this.uploadButton.disabled = true;
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('session_id', this.sessionId);
+
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Upload fehlgeschlagen');
+            }
+
+            const result = await response.json();
+
+            // Show success message in chat
+            this.showSystemMessage(`PDF "${result.filename}" hochgeladen und verarbeitet.`);
+
+            // Refresh file list
+            await this.loadFiles();
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            this.showError(`Fehler beim Hochladen: ${error.message}`);
+        } finally {
+            this.uploadButton.disabled = false;
+        }
+    }
+
+    async loadFiles() {
+        if (!this.sessionId) return;
+
+        try {
+            const response = await fetch(`/api/files/${this.sessionId}`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+
+            if (data.files && data.files.length > 0) {
+                this.displayFiles(data.files);
+            } else {
+                this.filesSection.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error loading files:', error);
+        }
+    }
+
+    displayFiles(files) {
+        this.filesList.innerHTML = '';
+
+        files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            if (!file.processed) {
+                fileItem.classList.add('processing');
+            }
+
+            const statusIcon = file.processed ? '✓' : '⏳';
+            const fileSize = this.formatFileSize(file.file_size);
+
+            fileItem.innerHTML = `
+                <span class="file-status-icon">${statusIcon}</span>
+                <span class="file-item-name" title="${file.filename}">${file.filename}</span>
+                <span class="file-item-size">${fileSize}</span>
+                <button class="file-delete" onclick="chatApp.deleteFile('${file.id}')" title="Löschen">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            `;
+
+            this.filesList.appendChild(fileItem);
+        });
+
+        this.filesSection.style.display = 'block';
+    }
+
+    async deleteFile(fileId) {
+        try {
+            const response = await fetch(`/api/files/${fileId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error('Löschen fehlgeschlagen');
+            }
+
+            this.showSystemMessage('Datei gelöscht.');
+            await this.loadFiles();
+
+        } catch (error) {
+            console.error('Delete error:', error);
+            this.showError(`Fehler beim Löschen: ${error.message}`);
+        }
+    }
+
+    showSystemMessage(message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message system';
+        messageDiv.style.textAlign = 'center';
+        messageDiv.style.color = '#6b7280';
+        messageDiv.style.fontSize = '12px';
+        messageDiv.style.margin = '8px 0';
+        messageDiv.textContent = message;
+        this.chatMessages.appendChild(messageDiv);
+        this.scrollToBottom();
+    }
+
+    formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    generateSessionId() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
 }
 
 // Initialize app when DOM is ready
+let chatApp;
 document.addEventListener('DOMContentLoaded', () => {
-    new ChatApp();
+    chatApp = new ChatApp();
 });
