@@ -12,6 +12,9 @@ COPY backend/app /app/app
 # Copy frontend (WICHTIG!)
 COPY frontend /frontend
 
+# Create data directory for database and uploads
+RUN mkdir -p /app/data /app/data/uploads
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \

@@ -5,8 +5,9 @@ from fastapi.responses import FileResponse
 import os
 from dotenv import load_dotenv
 
-from app.routes import chat, health
+from app.routes import chat, health, upload
 from app.middleware.security import SecurityMiddleware
+from app.db import init_db
 
 # Load environment variables
 load_dotenv()
@@ -19,12 +20,18 @@ app = FastAPI(
     redoc_url=None
 )
 
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    init_db()
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("FRONTEND_URL", "*")],
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
     allow_headers=["*"],
 )
 
@@ -38,6 +45,7 @@ app.mount("/js", StaticFiles(directory="/frontend/js"), name="js")
 # Include routers
 app.include_router(chat.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
+app.include_router(upload.router, prefix="/api")
 
 @app.get("/")
 async def root():

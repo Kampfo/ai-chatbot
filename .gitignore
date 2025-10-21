@@ -36,3 +36,9 @@ htmlcov/
 
 # Docker
 *.pid
+
+# Database and uploads
+data/
+*.db
+*.sqlite
+*.sqlite3
