@@ -1,58 +1,46 @@
-from fastapi import FastAPI, HTTPException, Request
+import os
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
-from dotenv import load_dotenv
 
-from app.routes import chat, health, upload
-from app.middleware.security import SecurityMiddleware
-from app.db import init_db
+from app.config import settings
+from app.models.database import init_db
+from app.api.routes import health, audits, findings, upload, chat
 
-# Load environment variables
-load_dotenv()
 
-# Create FastAPI app
-app = FastAPI(
-    title="AI Chatbot API",
-    version="1.0.0",
-    docs_url="/api/docs" if os.getenv("ENVIRONMENT") != "production" else None,
-    redoc_url=None
-)
-
-# Initialize database on startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
+def create_app() -> FastAPI:
     init_db()
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "*")],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "PUT"],
-    allow_headers=["*"],
-)
+    app = FastAPI(title=settings.app_name)
 
-# Security middleware
-app.add_middleware(SecurityMiddleware)
+    # CORS
+    origins = [settings.frontend_url]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins + ["http://localhost", "http://localhost:8000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Mount static files (CSS, JS, and other assets)
-app.mount("/css", StaticFiles(directory="/frontend/css"), name="css")
-app.mount("/js", StaticFiles(directory="/frontend/js"), name="js")
+    # API-Router
+    app.include_router(health.router, prefix="/api")
+    app.include_router(audits.router, prefix="/api")
+    app.include_router(findings.router, prefix="/api")
+    app.include_router(upload.router, prefix="/api")
+    app.include_router(chat.router, prefix="/api")
 
-# Include routers
-app.include_router(chat.router, prefix="/api")
-app.include_router(health.router, prefix="/api")
-app.include_router(upload.router, prefix="/api")
+    # Static frontend
+    frontend_dir = "/frontend"
+    if os.path.isdir(frontend_dir):
+        app.mount(
+            "/",
+            StaticFiles(directory=frontend_dir, html=True),
+            name="frontend",
+        )
 
-@app.get("/")
-async def root():
-    """Serve the frontend"""
-    return FileResponse("/frontend/index.html")
+    return app
 
-@app.exception_handler(Exception)
-async def global_exception_handler(_: Request, exc: Exception):
-    """Global error handler"""
-    return {"error": "An error occurred", "message": str(exc)}
+
+app = create_app()
