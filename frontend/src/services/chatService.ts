@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api/chat'; // Adjust based on environment
+const API_URL = '/api/chat'; // Relative path for Nginx proxy // Adjust based on environment
 
 export interface ChatSource {
     label: string;

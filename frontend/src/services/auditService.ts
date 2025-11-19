@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/audits'; // Adjust based on environment
+const API_URL = '/api/audits'; // Relative path for Nginx proxy
 
 export interface Audit {
     id: number;

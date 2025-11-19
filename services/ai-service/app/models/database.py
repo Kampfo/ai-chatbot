@@ -30,7 +30,7 @@ def generate_uuid() -> str:
 class Audit(Base):
     __tablename__ = "audits"
 
-    id = Column(String, primary_key=True, default=generate_uuid)
+    id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     status = Column(
@@ -54,7 +54,7 @@ class ChatSession(Base):
     __tablename__ = "sessions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    audit_id = Column(String, ForeignKey("audits.id"), nullable=False)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),
@@ -82,7 +82,7 @@ class UploadedFile(Base):
     __tablename__ = "uploaded_files"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    audit_id = Column(String, ForeignKey("audits.id"), nullable=False)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
     session_id = Column(String, ForeignKey("sessions.id"), nullable=True)
     filename = Column(String(512), nullable=False)
     content_type = Column(String(128), nullable=True)
@@ -98,7 +98,7 @@ class AuditFinding(Base):
     __tablename__ = "audit_findings"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    audit_id = Column(String, ForeignKey("audits.id"), nullable=False)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     severity = Column(String(32), nullable=True)  # LOW, MEDIUM, HIGH

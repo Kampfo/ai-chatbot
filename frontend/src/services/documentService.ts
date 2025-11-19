@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/documents/upload'; // Adjust based on environment
+const API_URL = '/api/documents'; // Relative path for Nginx proxy // Adjust based on environment
 
 export const uploadDocument = async (auditId: number, file: File) => {
     const formData = new FormData();
