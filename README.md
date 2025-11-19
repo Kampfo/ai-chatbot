@@ -1,22 +1,42 @@
-# AI Chatbot
+# Audit Management System (Microservices)
 
-Ein production-ready AI Chatbot mit OpenAI Integration, optimiert für Dokploy Deployment.
+Ein modernes, skalierbares Audit-Management-System mit AI-gestützter Dokumentenanalyse (RAG).
 
-## Features
+## Architektur
 
-- 🤖 OpenAI GPT Integration (GPT-3.5/GPT-4)
-- 💬 Streaming Responses
-- 🔒 Sicherheits-Features (Rate Limiting, Input Validation)
-- 📱 Responsive Design
-- 🚀 Docker-ready für Dokploy
-- ⚡ FastAPI Backend
-- 🎨 Modernes UI
+Das System basiert auf einer Microservices-Architektur:
 
-## Quick Start
+- **Frontend**: React (Vite) SPA mit TailwindCSS.
+- **Audit Service**: FastAPI Service für Audit-Verwaltung (CRUD).
+- **Document Service**: FastAPI Service für Dokumenten-Upload und Vektorisierung (Weaviate).
+- **AI Service**: FastAPI Service für RAG-Chat (OpenAI Integration).
+- **Datenbanken**: PostgreSQL (Audits), Weaviate (Vektoren).
 
-### Lokale Entwicklung
+## Deployment (Dokploy)
 
-1. Repository klonen:
-```bash
-git clone <your-repo>
-cd ai-chatbot
+Das Projekt ist für das Deployment mit Dokploy optimiert.
+
+### Voraussetzungen
+
+- Ein Dokploy Server.
+- OpenAI API Key.
+
+### Setup
+
+1.  Repository in Dokploy verbinden.
+2.  `docker-compose.yml` als Deployment-Methode wählen.
+3.  Environment Variables in Dokploy setzen:
+    ```
+    OPENAI_API_KEY=sk-...
+    ```
+4.  Deployen!
+
+## Lokale Entwicklung
+
+1.  Repository klonen.
+2.  `.env` Datei erstellen (siehe `.env.example`).
+3.  Starten:
+    ```bash
+    docker-compose up --build
+    ```
+4.  Frontend: http://localhost:3000

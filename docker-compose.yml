@@ -1,21 +1,84 @@
-version: '3.8'
-
 services:
-  chatbot:
-    build: .
+  # Frontend
+  webapp:
+    build: ./frontend
+    restart: always
     ports:
-      - "8000:8000"
+      - "3000:80"
+    networks:
+      - app-network
+
+  # Backend Services
+  audit-service:
+    build: ./services/audit-service
+    restart: always
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=audit_db
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+  document-service:
+    build: ./services/document-service
+    restart: always
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+    volumes:
+      - app-uploads:/app/uploads
+    networks:
+      - app-network
+    depends_on:
+      - weaviate
+
+  ai-service:
+    build: ./services/ai-service
+    restart: always
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ENVIRONMENT=development
-      - FRONTEND_URL=http://localhost:8000
-      - DATABASE_URL=sqlite:///./data/chatbot.db
-      - UPLOAD_DIR=/app/data/uploads
+      - DOCUMENT_SERVICE_URL=http://document-service:8000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres/audit_db
+    networks:
+      - app-network
+    depends_on:
+      - audit-service
+      - document-service
+
+  # Infrastructure
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=audit_db
     volumes:
-      - ./backend:/app
-      - ./frontend:/frontend
-      - chatbot_data:/app/data
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    restart: always
+    environment:
+      - QUERY_DEFAULTS_LIMIT=25
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=on
+      - DEFAULT_VECTORIZER_MODULE=none
+      - CLUSTER_HOSTNAME=node1
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    networks:
+      - app-network
 
 volumes:
-  chatbot_data:
+  pg-data:
+  app-uploads:
+  weaviate-data:
+
+
+networks:
+  app-network:
+    driver: bridge

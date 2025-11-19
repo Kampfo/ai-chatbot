@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.models.database import init_db
-from app.api.routes import health, audits, findings, upload, chat
+from app.api.routes import health, chat
 
 # Setup logging
 logging.basicConfig(
@@ -53,9 +53,6 @@ def create_app() -> FastAPI:
 
     # API-Router
     app.include_router(health.router, prefix="/api")
-    app.include_router(audits.router, prefix="/api")
-    app.include_router(findings.router, prefix="/api")
-    app.include_router(upload.router, prefix="/api")
     app.include_router(chat.router, prefix="/api")
     logger.info("API routes registered")
 
