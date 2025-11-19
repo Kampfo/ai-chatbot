@@ -33,18 +33,16 @@ class ChatResponse(BaseModel):
 
 
 @router.post("", response_model=ChatResponse)
-def chat(
+async def chat(
     payload: ChatRequest,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    audit = db.query(Audit).filter(Audit.id == payload.audit_id).first()
-    if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
-
+    # Audit check removed for microservice decoupling (or should call Audit Service)
+    
     try:
-        result = ai_service.chat(
+        result = await ai_service.chat(
             db=db,
-            audit_id=audit.id,
+            audit_id=payload.audit_id,
             session_id=payload.session_id,
             user_message=payload.message,
         )
