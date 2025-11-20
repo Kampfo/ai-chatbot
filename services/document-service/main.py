@@ -40,23 +40,30 @@ def load_model():
 # Initialize Weaviate Schema on startup with retries
 @app.on_event("startup")
 async def startup_event():
-    # Load model first
-    load_model()
-    
-    # Try to connect to Weaviate
-    max_retries = 10
-    for i in range(max_retries):
-        try:
-            logger.info(f"Attempting to connect to Weaviate (Attempt {i+1}/{max_retries})...")
-            init_schema()
-            logger.info("Weaviate schema initialized successfully.")
-            break
-        except Exception as e:
-            logger.warning(f"Weaviate not ready yet: {e}")
-            if i < max_retries - 1:
-                time.sleep(5)
-            else:
-                logger.error("Could not connect to Weaviate after multiple retries.")
+    try:
+        # Load model
+        load_model()
+    except Exception as e:
+        logger.error(f"Startup warning: Failed to load model: {e}")
+        # Don't raise, allow app to start in degraded state
+
+    try:
+        # Try to connect to Weaviate
+        max_retries = 5
+        for i in range(max_retries):
+            try:
+                logger.info(f"Attempting to connect to Weaviate (Attempt {i+1}/{max_retries})...")
+                init_schema()
+                logger.info("Weaviate schema initialized successfully.")
+                break
+            except Exception as e:
+                logger.warning(f"Weaviate not ready yet: {e}")
+                if i < max_retries - 1:
+                    time.sleep(2)
+                else:
+                    logger.error("Could not connect to Weaviate after multiple retries. Service will run in degraded mode.")
+    except Exception as e:
+        logger.error(f"Startup warning: Weaviate init failed: {e}")
 
 UPLOAD_DIR = "/app/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
