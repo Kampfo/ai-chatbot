@@ -48,6 +48,11 @@ class AuditBase(BaseModel):
 class AuditCreate(AuditBase):
     pass
 
+class AuditUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[AuditStatus] = None
+
 class Audit(AuditBase):
     id: int
     created_at: datetime
