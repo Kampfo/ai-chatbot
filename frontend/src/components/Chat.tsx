@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { sendMessage, ChatResponse, ChatSource } from '../services/chatService';
+import { useState, useRef, useEffect } from 'react';
+import { sendMessage } from '../services/chatService';
+import type { ChatResponse, ChatSource } from '../services/chatService';
 import { Send, Bot, FileText } from 'lucide-react';
 
 interface ChatProps {
@@ -35,7 +36,7 @@ const Chat: React.FC<ChatProps> = ({ auditId }) => {
         setLoading(true);
 
         try {
-            const response = await sendMessage(auditId, userMsg, sessionId);
+            const response: ChatResponse = await sendMessage(auditId, userMsg, sessionId);
             setSessionId(response.session_id);
             setMessages(prev => [...prev, {
                 role: 'assistant',

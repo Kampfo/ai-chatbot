@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { getAudits, Audit, createAudit } from '../services/auditService';
+import { useEffect, useState } from 'react';
+import { getAudits, createAudit } from '../services/auditService';
+import type { Audit } from '../services/auditService';
 import { PlusCircle, FileText, MessageSquare } from 'lucide-react';
 import Chat from './Chat';
 import DocumentUpload from './DocumentUpload';
@@ -92,8 +93,8 @@ const Dashboard: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${audit.status === 'PLANNED' ? 'bg-yellow-100 text-yellow-800' :
-                                            audit.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
-                                                'bg-green-100 text-green-800'
+                                        audit.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' :
+                                            'bg-green-100 text-green-800'
                                         }`}>
                                         {audit.status}
                                     </span>
