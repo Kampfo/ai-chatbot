@@ -1,13 +1,32 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 import models, schemas, database
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Audit Service")
 
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 def startup_event():
-    models.Base.metadata.create_all(bind=database.engine)
+    try:
+        models.Base.metadata.create_all(bind=database.engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        # Don't crash, allow service to start
 
 def get_db():
     db = database.SessionLocal()
@@ -15,6 +34,10 @@ def get_db():
         yield db
     finally:
         db.close()
+
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "audit-service"}
 
 @app.post("/audits", response_model=schemas.Audit)
 def create_audit(audit: schemas.AuditCreate, db: Session = Depends(get_db)):

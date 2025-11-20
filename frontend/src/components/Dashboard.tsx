@@ -11,6 +11,8 @@ const Dashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'audits' | 'planning' | 'actions' | 'settings' | 'profile'>('audits');
     const [audits, setAudits] = useState<Audit[]>([]);
     const [selectedAudit, setSelectedAudit] = useState<Audit | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         loadAudits();
@@ -18,10 +20,16 @@ const Dashboard: React.FC = () => {
 
     const loadAudits = async () => {
         try {
+            setLoading(true);
+            setError(null);
             const data = await getAudits();
             setAudits(data);
         } catch (error) {
             console.error("Failed to load audits", error);
+            setError("Konnte Prüfungen nicht laden. Backend evtl. nicht erreichbar.");
+            // Don't throw, just log and continue
+        } finally {
+            setLoading(false);
         }
     };
 
