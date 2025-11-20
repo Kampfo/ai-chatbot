@@ -17,14 +17,13 @@ services:
     build: ./services/audit-service
     restart: always
     environment:
-      - DB_HOST=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=audit_db
+      - DB_HOST=mpbtest-setup-postgresql-gp757u
+      - DB_PORT=5432
+      - DB_USER=Appuser
+      - DB_PASSWORD=Passwort
+      - DB_NAME=App
     networks:
       - app-network
-    depends_on:
-      - postgres
 
   document-service:
     build: ./services/document-service
@@ -44,7 +43,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENT_SERVICE_URL=http://document-service:8000
-      - DATABASE_URL=postgresql://postgres:postgres@postgres/audit_db
+      - DATABASE_URL=postgresql://Appuser:Passwort@mpbtest-setup-postgresql-gp757u:5432/App
     networks:
       - app-network
     depends_on:
@@ -52,18 +51,6 @@ services:
       - document-service
 
   # Infrastructure
-  postgres:
-    image: postgres:15
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=audit_db
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    networks:
-      - app-network
-
   weaviate:
     image: semitechnologies/weaviate:latest
     restart: always
@@ -78,7 +65,6 @@ services:
       - app-network
 
 volumes:
-  pg-data:
   app-uploads:
   weaviate-data:
 
