@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { sendMessage } from '../services/chatService';
-import type { ChatResponse, ChatSource } from '../services/chatService';
+import type { ChatSource } from '../services/chatService';
 import { Send, Bot, FileText } from 'lucide-react';
 
 interface ChatProps {
@@ -35,17 +35,46 @@ const Chat: React.FC<ChatProps> = ({ auditId }) => {
         setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
         setLoading(true);
 
+        // Add placeholder for assistant message
+        setMessages(prev => [...prev, { role: 'assistant', content: '', sources: [] }]);
+
         try {
-            const response: ChatResponse = await sendMessage(auditId, userMsg, sessionId);
-            setSessionId(response.session_id);
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: response.message,
-                sources: response.sources
-            }]);
+            await sendMessage(
+                auditId,
+                userMsg,
+                sessionId,
+                (chunk) => {
+                    setMessages(prev => {
+                        const newMessages = [...prev];
+                        const lastMsg = newMessages[newMessages.length - 1];
+                        if (lastMsg.role === 'assistant') {
+                            lastMsg.content += chunk;
+                        }
+                        return newMessages;
+                    });
+                },
+                (metadata) => {
+                    setSessionId(metadata.session_id);
+                    setMessages(prev => {
+                        const newMessages = [...prev];
+                        const lastMsg = newMessages[newMessages.length - 1];
+                        if (lastMsg.role === 'assistant') {
+                            lastMsg.sources = metadata.sources;
+                        }
+                        return newMessages;
+                    });
+                }
+            );
         } catch (error) {
             console.error("Chat error", error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, something went wrong." }]);
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const lastMsg = newMessages[newMessages.length - 1];
+                if (lastMsg.role === 'assistant') {
+                    lastMsg.content += "\n[Error: Something went wrong]";
+                }
+                return newMessages;
+            });
         } finally {
             setLoading(false);
         }
