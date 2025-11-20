@@ -4,9 +4,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import os
 import json
-import asyncio
+import httpx
 
-app = FastAPI(title="AI Service - Minimal")
+app = FastAPI(title="AI Service")
 
 # CORS
 app.add_middleware(
@@ -24,7 +24,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "service": "ai-service-minimal"}
+    return {"status": "healthy", "service": "ai-service"}
 
 @app.get("/api/chat/test")
 async def chat_test():
@@ -37,22 +37,71 @@ async def chat_test():
 
 @app.post("/api/chat")
 async def chat(payload: ChatRequest):
-    """Minimal working chat"""
+    """Chat with OpenAI streaming"""
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not openai_api_key:
+        async def error_stream():
+            yield json.dumps({"type": "metadata", "session_id": "error", "sources": []}) + "\n"
+            yield json.dumps({"type": "content", "chunk": "Fehler: OPENAI_API_KEY nicht konfiguriert."}) + "\n"
+        return StreamingResponse(error_stream(), media_type="application/x-ndjson")
+
     async def generate():
-        # Metadata
-        yield json.dumps({
-            "type": "metadata",
-            "session_id": "test123",
-            "sources": []
-        }) + "\n"
-        
-        # Simple response
-        response_text = f"Echo: {payload.message}"
-        for char in response_text:
+        try:
+            # Send metadata first
+            yield json.dumps({
+                "type": "metadata",
+                "session_id": str(payload.session_id or "new"),
+                "sources": []
+            }) + "\n"
+
+            # Call OpenAI API
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Du bist ein hilfreicher Assistent für interne Revision und Audit-Management. Beantworte Fragen präzise und professionell."
+                            },
+                            {
+                                "role": "user",
+                                "content": payload.message
+                            }
+                        ],
+                        "stream": True
+                    }
+                )
+                
+                # Stream the response
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            if "choices" in data and len(data["choices"]) > 0:
+                                delta = data["choices"][0].get("delta", {})
+                                content = delta.get("content")
+                                if content:
+                                    yield json.dumps({
+                                        "type": "content",
+                                        "chunk": content
+                                    }) + "\n"
+                        except json.JSONDecodeError:
+                            pass
+
+        except Exception as e:
             yield json.dumps({
                 "type": "content",
-                "chunk": char
+                "chunk": f"\n\n[Fehler: {str(e)}]"
             }) + "\n"
-            await asyncio.sleep(0.01)
-    
+
     return StreamingResponse(generate(), media_type="application/x-ndjson")
