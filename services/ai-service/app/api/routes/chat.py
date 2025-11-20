@@ -1,50 +1,84 @@
-from typing import Any, Dict
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
-from app.models.database import Audit, get_db
-from app.services.openai_service import OpenAIService
+from fastapi.responses import StreamingResponse
+import os
+import json
+from openai import AsyncOpenAI
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-ai_service = OpenAIService()
-
+# Initialize OpenAI client
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
 
 class ChatRequest(BaseModel):
     audit_id: str
     message: str
     session_id: str | None = None
 
-
-class ChatSource(BaseModel):
-    label: str
-    file_id: str | None = None
-    filename: str | None = None
-    chunk_index: int | None = None
-    score: float | None = None
-
-
-class ChatResponse(BaseModel):
-    session_id: str
-    message: str
-    sources: list[ChatSource] = []
-
-
-from fastapi.responses import StreamingResponse
-
 @router.post("")
-async def chat(
-    payload: ChatRequest,
-    db: Session = Depends(get_db),
-):
+async def chat(payload: ChatRequest):
+    """
+    Simplified chat endpoint that streams directly from OpenAI.
+    No database dependencies, no document retrieval - just pure chat.
+    """
+    if not openai_client:
+        async def error_stream():
+            yield json.dumps({
+                "type": "metadata",
+                "session_id": "error",
+                "sources": []
+            }) + "\n"
+            yield json.dumps({
+                "type": "content",
+                "chunk": "Fehler: OPENAI_API_KEY nicht konfiguriert."
+            }) + "\n"
+        return StreamingResponse(error_stream(), media_type="application/x-ndjson")
+
+    async def generate_response():
+        try:
+            # Send metadata first
+            yield json.dumps({
+                "type": "metadata",
+                "session_id": payload.session_id or "new",
+                "sources": []
+            }) + "\n"
+
+            # Simple system prompt
+            messages = [
+                {
+                    "role": "system",
+                    "content": "Du bist ein hilfreicher Assistent für interne Revision und Audit-Management. Beantworte Fragen präzise und professionell."
+                },
+                {
+                    "role": "user",
+                    "content": payload.message
+                }
+            ]
+
+            # Stream from OpenAI
+            stream = await openai_client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                messages=messages,
+                stream=True,
+            )
+
+            async for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield json.dumps({
+                        "type": "content",
+                        "chunk": content
+                    }) + "\n"
+
+        except Exception as e:
+            # Error handling
+            yield json.dumps({
+                "type": "content",
+                "chunk": f"\n\n[Fehler: {str(e)}]"
+            }) + "\n"
+
     return StreamingResponse(
-        ai_service.chat_stream(
-            db=db,
-            audit_id=payload.audit_id,
-            session_id=payload.session_id,
-            user_message=payload.message,
-        ),
+        generate_response(),
         media_type="application/x-ndjson"
     )
