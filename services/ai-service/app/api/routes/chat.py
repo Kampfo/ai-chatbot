@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import os
@@ -12,9 +12,18 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
 
 class ChatRequest(BaseModel):
-    audit_id: str
+    audit_id: str | int | None = None
     message: str
     session_id: str | None = None
+
+@router.get("/test")
+async def test_endpoint():
+    """Test endpoint to verify service is running"""
+    return {
+        "status": "ok",
+        "service": "chat",
+        "openai_configured": openai_client is not None
+    }
 
 @router.post("")
 async def chat(payload: ChatRequest):
@@ -40,7 +49,7 @@ async def chat(payload: ChatRequest):
             # Send metadata first
             yield json.dumps({
                 "type": "metadata",
-                "session_id": payload.session_id or "new",
+                "session_id": str(payload.session_id or "new"),
                 "sources": []
             }) + "\n"
 
@@ -64,15 +73,19 @@ async def chat(payload: ChatRequest):
             )
 
             async for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield json.dumps({
-                        "type": "content",
-                        "chunk": content
-                    }) + "\n"
+                if chunk.choices and len(chunk.choices) > 0:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield json.dumps({
+                            "type": "content",
+                            "chunk": content
+                        }) + "\n"
 
         except Exception as e:
             # Error handling
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Chat error: {error_details}")
             yield json.dumps({
                 "type": "content",
                 "chunk": f"\n\n[Fehler: {str(e)}]"
