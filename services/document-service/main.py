@@ -1,13 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import shutil
 import os
 import time
+import logging
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 from vector_store import get_weaviate_client, init_schema
-import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +28,7 @@ app.add_middleware(
 
 # Global model variable
 model = None
+executor = ThreadPoolExecutor(max_workers=1)  # Limit to 1 worker to save RAM
 
 def load_model():
     global model
@@ -37,18 +40,17 @@ def load_model():
         logger.error(f"Failed to load model: {e}")
         raise e
 
-# Initialize Weaviate Schema on startup with retries
 @app.on_event("startup")
 async def startup_event():
+    # Run model loading in thread to not block startup
+    loop = asyncio.get_event_loop()
     try:
-        # Load model
-        load_model()
+        await loop.run_in_executor(executor, load_model)
     except Exception as e:
         logger.error(f"Startup warning: Failed to load model: {e}")
-        # Don't raise, allow app to start in degraded state
 
+    # Try to connect to Weaviate
     try:
-        # Try to connect to Weaviate
         max_retries = 5
         for i in range(max_retries):
             try:
@@ -60,8 +62,6 @@ async def startup_event():
                 logger.warning(f"Weaviate not ready yet: {e}")
                 if i < max_retries - 1:
                     time.sleep(2)
-                else:
-                    logger.error("Could not connect to Weaviate after multiple retries. Service will run in degraded mode.")
     except Exception as e:
         logger.error(f"Startup warning: Weaviate init failed: {e}")
 
@@ -70,83 +70,102 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/health")
 async def health():
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None
+    }
+
+def process_file_sync(file_path: str, filename: str, audit_id: int):
+    """
+    CPU-intensive task: Parse PDF, chunk text, embed, and upload to Weaviate.
+    This runs in a separate thread.
+    """
     try:
-        client = get_weaviate_client()
-        is_ready = client.is_ready()
-        return {
-            "status": "healthy" if is_ready else "degraded",
-            "weaviate_ready": is_ready,
-            "model_loaded": model is not None
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "model_loaded": model is not None
-        }
-
-@app.post("/documents/upload")
-async def upload_document(
-    audit_id: int = Form(...),
-    file: UploadFile = File(...)
-):
-    if not model:
-        raise HTTPException(status_code=503, detail="Embedding model not loaded")
-
-    try:
-        file_location = f"{UPLOAD_DIR}/{file.filename}"
-        with open(file_location, "wb+") as file_object:
-            shutil.copyfileobj(file.file, file_object)
-
-        # Extract text
+        logger.info(f"Processing file: {filename}")
+        
+        # 1. Extract Text
         text_content = ""
-        if file.filename.lower().endswith(".pdf"):
+        if filename.lower().endswith(".pdf"):
             try:
-                reader = PdfReader(file_location)
+                reader = PdfReader(file_path)
                 for page in reader.pages:
                     text_content += page.extract_text() + "\n"
             except Exception as e:
-                logger.error(f"Error reading PDF: {e}")
-                raise HTTPException(status_code=400, detail=f"Invalid PDF file: {str(e)}")
+                logger.error(f"Error reading PDF {filename}: {e}")
+                return
         else:
-            # Fallback for text files
             try:
-                with open(file_location, "r", encoding='utf-8', errors='ignore') as f:
+                with open(file_path, "r", encoding='utf-8', errors='ignore') as f:
                     text_content = f.read()
             except Exception as e:
-                logger.error(f"Error reading text file: {e}")
-                text_content = "Could not extract text."
+                logger.error(f"Error reading text file {filename}: {e}")
+                return
 
         if not text_content.strip():
-             raise HTTPException(status_code=400, detail="No text content extracted from file")
+            logger.warning(f"No text content in {filename}")
+            return
 
-        # Chunk text (simple chunking)
+        # 2. Chunk Text
         chunk_size = 1000
         chunks = [text_content[i:i+chunk_size] for i in range(0, len(text_content), chunk_size)]
+        logger.info(f"Generated {len(chunks)} chunks for {filename}")
 
+        # 3. Embed and Upload (Batching)
         client = get_weaviate_client()
-        if not client.is_ready():
-             raise HTTPException(status_code=503, detail="Weaviate is not ready")
-
-        logger.info(f"Processing {len(chunks)} chunks for file {file.filename}")
-
-        for chunk in chunks:
-            embedding = model.encode(chunk).tolist()
-            
-            client.data_object.create(
-                data_object={
+        
+        # Configure batch
+        client.batch.configure(batch_size=100) 
+        
+        with client.batch as batch:
+            for i, chunk in enumerate(chunks):
+                # Embedding is CPU heavy!
+                embedding = model.encode(chunk).tolist()
+                
+                properties = {
                     "content": chunk,
-                    "filename": file.filename,
+                    "filename": filename,
                     "audit_id": audit_id
-                },
-                class_name="Document",
-                vector=embedding
-            )
+                }
+                
+                batch.add_data_object(
+                    data_object=properties,
+                    class_name="Document",
+                    vector=embedding
+                )
+                
+        logger.info(f"Successfully processed and uploaded {filename}")
 
-        return {"filename": file.filename, "chunks_processed": len(chunks), "status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to process file {filename}: {e}")
 
-    except HTTPException as he:
-        raise he
+@app.post("/documents/upload")
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    audit_id: int = Form(...),
+    file: UploadFile = File(...)
+):
+    """
+    Accepts the upload immediately and processes it in the background.
+    This prevents Nginx timeouts.
+    """
+    if not model:
+        raise HTTPException(status_code=503, detail="Model is still loading, please try again in a moment")
+
+    try:
+        # Save file first (IO bound, fast enough)
+        file_location = f"{UPLOAD_DIR}/{file.filename}"
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+            
+        # Offload processing to background task
+        background_tasks.add_task(process_file_sync, file_location, file.filename, audit_id)
+
+        return {
+            "filename": file.filename, 
+            "status": "processing_started", 
+            "message": "File uploaded and processing started in background"
+        }
+
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
@@ -154,8 +173,13 @@ async def upload_document(
 @app.post("/documents/search")
 async def search_documents(query: str, audit_id: int = None):
     if not model:
-        raise HTTPException(status_code=503, detail="Embedding model not loaded")
+        raise HTTPException(status_code=503, detail="Model not loaded")
         
+    # Run search in executor to avoid blocking
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, _search_sync, query, audit_id)
+
+def _search_sync(query: str, audit_id: int):
     try:
         client = get_weaviate_client()
         query_vector = model.encode(query).tolist()
@@ -171,15 +195,13 @@ async def search_documents(query: str, audit_id: int = None):
         query_builder = client.query.get("Document", ["content", "filename", "audit_id"])
         query_builder = query_builder.with_near_vector({
             "vector": query_vector,
-            "certainty": 0.6  # Slightly lowered certainty
+            "certainty": 0.6
         })
         
         if audit_id:
             query_builder = query_builder.with_where(where_filter)
             
-        response = query_builder.with_limit(5).do()
-
-        return response
+        return query_builder.with_limit(5).do()
     except Exception as e:
         logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise e
