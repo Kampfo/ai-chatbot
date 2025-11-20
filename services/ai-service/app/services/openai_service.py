@@ -114,18 +114,15 @@ class OpenAIService:
 
         return messages
 
-    async def chat(
+    async def chat_stream(
         self,
         db: Session,
         audit_id: str,
         session_id: Optional[str],
         user_message: str,
-    ) -> Dict[str, Any]:
+    ):
         if session_id:
             session = self.get_session(db, session_id)
-            if str(session.audit_id) != str(audit_id):
-                 # Loose check for string/int mismatch
-                pass 
         else:
             session = self.create_session(db, audit_id)
             session_id = session.id
@@ -133,32 +130,68 @@ class OpenAIService:
         msg_user = Message(session_id=session.id, role="user", content=user_message)
         db.add(msg_user)
         db.commit()
-        db.refresh(msg_user)
 
-        retrieval = await self.build_retrieval_context(audit_id=audit_id, user_message=user_message)
-        context_text = retrieval["context_text"]
-        sources = retrieval["sources"]
+        # Retrieval (Optional - if fails, we continue)
+        try:
+            retrieval = await self.build_retrieval_context(audit_id=audit_id, user_message=user_message)
+            context_text = retrieval["context_text"]
+            sources = retrieval["sources"]
+        except Exception as e:
+            print(f"Retrieval failed: {e}")
+            context_text = ""
+            sources = []
 
-        messages = self.build_message_history(
-            db=db,
-            session=session,
-            context_text=context_text,
-            user_message=user_message,
+        # Update System Prompt for General Chat
+        system_prompt = (
+            "Du bist ein hilfreicher Assistent für interne Revision. "
+            "Nutze die bereitgestellten Dokumentauszüge, um präzise Antworten zu geben. "
+            "Wenn die Auszüge nicht ausreichen oder die Frage allgemein ist, nutze dein allgemeines Wissen. "
+            "Referenziere Quellen mit [1], [2], wenn du sie nutzt."
         )
 
-        response = await self.client.chat.completions.create(
+        messages = []
+        messages.append({"role": "system", "content": system_prompt})
+        
+        if context_text:
+            messages.append({"role": "system", "content": f"Relevante Dokumentauszüge:\n\n{context_text}"})
+
+        # History
+        history = (
+            db.query(Message)
+            .filter(Message.session_id == session.id)
+            .order_by(Message.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        for m in reversed(history):
+            if m.role in ("user", "assistant"):
+                messages.append({"role": m.role, "content": m.content})
+
+        messages.append({"role": "user", "content": user_message})
+
+        # Yield Metadata first
+        import json
+        yield json.dumps({
+            "type": "metadata",
+            "session_id": str(session_id),
+            "sources": sources
+        }) + "\n"
+
+        # Stream Response
+        full_response = ""
+        stream = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
+            stream=True,
         )
-        assistant_text = response.choices[0].message.content
 
-        msg_assistant = Message(session_id=session.id, role="assistant", content=assistant_text)
+        async for chunk in stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                full_response += content
+                yield json.dumps({"type": "content", "chunk": content}) + "\n"
+
+        # Save Assistant Message
+        msg_assistant = Message(session_id=session.id, role="assistant", content=full_response)
         db.add(msg_assistant)
         db.commit()
-        db.refresh(msg_assistant)
-
-        return {
-            "session_id": session_id,
-            "message": assistant_text,
-            "sources": sources,
-        }

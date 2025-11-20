@@ -32,21 +32,19 @@ class ChatResponse(BaseModel):
     sources: list[ChatSource] = []
 
 
-@router.post("", response_model=ChatResponse)
+from fastapi.responses import StreamingResponse
+
+@router.post("")
 async def chat(
     payload: ChatRequest,
     db: Session = Depends(get_db),
-) -> Dict[str, Any]:
-    # Audit check removed for microservice decoupling (or should call Audit Service)
-    
-    try:
-        result = await ai_service.chat(
+):
+    return StreamingResponse(
+        ai_service.chat_stream(
             db=db,
             audit_id=payload.audit_id,
             session_id=payload.session_id,
             user_message=payload.message,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return result
+        ),
+        media_type="application/x-ndjson"
+    )
