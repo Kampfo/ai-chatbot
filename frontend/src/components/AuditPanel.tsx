@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, Edit, Trash2, X, FileText } from 'lucide-react';
+import { PlusCircle, Edit, X, FileText } from 'lucide-react';
 import type { Audit } from '../services/auditService';
 import { createAudit, updateAudit } from '../services/auditService';
 
@@ -18,7 +18,11 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
 }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingAudit, setEditingAudit] = useState<Audit | null>(null);
-    const [formData, setFormData] = useState({ title: '', description: '', status: 'PLANNED' as const });
+    const [formData, setFormData] = useState<{ title: string; description: string; status: string }>({
+        title: '',
+        description: '',
+        status: 'PLANNED'
+    });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
