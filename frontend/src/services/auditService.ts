@@ -19,3 +19,8 @@ export const createAudit = async (audit: { title: string; description: string })
     const response = await axios.post(API_URL, audit);
     return response.data;
 };
+
+export const updateAudit = async (id: number, audit: Partial<Audit>) => {
+    const response = await axios.put(`${API_URL}/${id}`, audit);
+    return response.data;
+};
