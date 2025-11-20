@@ -3,13 +3,9 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import os
 import json
-from openai import AsyncOpenAI
+import httpx
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-# Initialize OpenAI client
-openai_api_key = os.getenv("OPENAI_API_KEY")
-openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
 
 class ChatRequest(BaseModel):
     audit_id: str | int | None = None
@@ -19,19 +15,21 @@ class ChatRequest(BaseModel):
 @router.get("/test")
 async def test_endpoint():
     """Test endpoint to verify service is running"""
+    openai_key = os.getenv("OPENAI_API_KEY", "")
     return {
         "status": "ok",
         "service": "chat",
-        "openai_configured": openai_client is not None
+        "openai_configured": bool(openai_key and len(openai_key) > 10)
     }
 
 @router.post("")
 async def chat(payload: ChatRequest):
     """
-    Simplified chat endpoint that streams directly from OpenAI.
-    No database dependencies, no document retrieval - just pure chat.
+    Ultra-simple chat using direct OpenAI API calls with httpx
     """
-    if not openai_client:
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not openai_api_key:
         async def error_stream():
             yield json.dumps({
                 "type": "metadata",
@@ -53,36 +51,51 @@ async def chat(payload: ChatRequest):
                 "sources": []
             }) + "\n"
 
-            # Simple system prompt
-            messages = [
-                {
-                    "role": "system",
-                    "content": "Du bist ein hilfreicher Assistent für interne Revision und Audit-Management. Beantworte Fragen präzise und professionell."
-                },
-                {
-                    "role": "user",
-                    "content": payload.message
-                }
-            ]
-
-            # Stream from OpenAI
-            stream = await openai_client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                messages=messages,
-                stream=True,
-            )
-
-            async for chunk in stream:
-                if chunk.choices and len(chunk.choices) > 0:
-                    content = chunk.choices[0].delta.content
-                    if content:
-                        yield json.dumps({
-                            "type": "content",
-                            "chunk": content
-                        }) + "\n"
+            # Direct OpenAI API call
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Du bist ein hilfreicher Assistent für interne Revision und Audit-Management."
+                            },
+                            {
+                                "role": "user",
+                                "content": payload.message
+                            }
+                        ],
+                        "stream": True
+                    },
+                    timeout=60.0
+                )
+                
+                # Stream the response
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            if "choices" in data and len(data["choices"]) > 0:
+                                delta = data["choices"][0].get("delta", {})
+                                content = delta.get("content")
+                                if content:
+                                    yield json.dumps({
+                                        "type": "content",
+                                        "chunk": content
+                                    }) + "\n"
+                        except json.JSONDecodeError:
+                            pass
 
         except Exception as e:
-            # Error handling
             import traceback
             error_details = traceback.format_exc()
             print(f"Chat error: {error_details}")
