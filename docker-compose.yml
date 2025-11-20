@@ -7,6 +7,10 @@ services:
       - "3005:80"
     networks:
       - app-network
+    depends_on:
+      - audit-service
+      - document-service
+      - ai-service
 
   # Backend Services
   audit-service:
