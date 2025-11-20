@@ -1,17 +1,5 @@
-// import axios from 'axios'; // Removed unused import
-
-const API_URL = '/api/chat'; // Relative path for Nginx proxy // Adjust based on environment
-
-export interface ChatSource {
-    label: string;
-    filename: string;
-    snippet: string;
-}
-
-export interface ChatResponse {
-// import axios from 'axios'; // Removed unused import
-
-const API_URL = '/api/chat'; // Relative path for Nginx proxy // Adjust based on environment
+// Service for AI Chat API
+const API_URL = '/api/chat';
 
 export interface ChatSource {
     label: string;
