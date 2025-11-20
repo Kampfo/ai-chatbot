@@ -3,17 +3,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt .
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# User creation removed to avoid volume permission issues
-# RUN useradd -m -u 1000 appuser && \
 # Run as root to avoid permission issues with volumes for now
 # USER appuser
 
