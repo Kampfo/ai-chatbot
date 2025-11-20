@@ -40,12 +40,16 @@ services:
   ai-service:
     build: ./services/ai-service
     restart: always
+    ports:
+      - "8001:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENT_SERVICE_URL=http://document-service:8000
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/audit_db}
     networks:
       - app-network
+    depends_on:
+      - postgres
 
   # Infrastructure
   postgres:
