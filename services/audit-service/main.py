@@ -22,10 +22,12 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     try:
+        logger.info("Initializing database tables...")
         models.Base.metadata.create_all(bind=database.engine)
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
+        logger.warning("Service will continue without database. Some features may not work.")
         # Don't crash, allow service to start
 
 def get_db():
@@ -37,7 +39,21 @@ def get_db():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "audit-service"}
+    try:
+        # Try to check DB connection
+        db = database.SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {"status": "healthy", "service": "audit-service", "database": db_status}
+
+@app.get("/test")
+def test():
+    """Ultra simple test endpoint"""
+    return {"message": "Audit service is responding!"}
 
 @app.post("/audits", response_model=schemas.Audit)
 def create_audit(audit: schemas.AuditCreate, db: Session = Depends(get_db)):
