@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAudits, createAudit, updateAudit } from '../services/auditService';
 import type { Audit } from '../services/auditService';
-import { PlusCircle, FileText, MessageSquare, Edit, X, Check } from 'lucide-react';
+import { PlusCircle, FileText, MessageSquare, Edit, X } from 'lucide-react';
 import Chat from './Chat';
 import DocumentUpload from './DocumentUpload';
 
