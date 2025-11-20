@@ -24,8 +24,8 @@ def create_app() -> FastAPI:
         init_db()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+        logger.warning(f"Database initialization failed (non-critical): {e}")
+        # Don't raise - allow service to start without DB
 
     app = FastAPI(title=settings.app_name)
 
