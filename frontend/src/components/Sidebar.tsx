@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { FileText, LayoutDashboard } from 'lucide-react';
 
 const navItems = [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/audits', icon: FileText, label: 'Prüfungen' },
 ];
 

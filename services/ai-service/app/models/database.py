@@ -172,6 +172,18 @@ class DocumentAnalysis(Base):
     file = relationship("UploadedFile")
 
 
+class AuditReport(Base):
+    __tablename__ = "audit_reports"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    content_markdown = Column(Text, nullable=True)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    audit = relationship("Audit")
+
+
 # --- Engine / Session ---
 
 os.makedirs(

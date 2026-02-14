@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models.database import init_db
-from app.api.routes import audits, findings, chat, upload, health, risks
+from app.api.routes import audits, findings, chat, upload, health, risks, analysis, reports
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +27,8 @@ app.include_router(findings.router, prefix="/api")
 app.include_router(risks.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
+app.include_router(analysis.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 
 @app.on_event("startup")

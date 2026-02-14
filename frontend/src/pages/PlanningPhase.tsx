@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Save, Plus, Trash2 } from 'lucide-react';
-import type { Audit, AuditStatus } from '../services/auditService';
+import { Save } from 'lucide-react';
+import type { Audit } from '../services/auditService';
 import { updateAudit, updateAuditStatus } from '../services/auditService';
 
 interface AuditDetailContext {
