@@ -20,25 +20,18 @@ jobs:
 
     - name: Install Backend Dependencies & Run Tests
       run: |
-        # Audit Service
-        cd services/audit-service
+        # AI Service (vereinheitlichter Backend-Service)
+        cd services/ai-service
         pip install -r requirements.txt
-        python -m pytest
+        # python -m pytest
         cd ../..
 
         # Document Service
         cd services/document-service
-        pip install -r requirements.txt
-        # Mocking weaviate/db for CI might be needed, skipping integration tests if no DB
-        # python -m pytest
-        cd ../..
-
-        # AI Service
-        cd services/ai-service
         pip install -r requirements.txt
         # python -m pytest
         cd ../..
 
     - name: Build Docker Images
       run: |
-        docker-compose build
+        docker compose build

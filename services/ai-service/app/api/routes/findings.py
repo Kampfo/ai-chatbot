@@ -30,7 +30,7 @@ class FindingUpdate(BaseModel):
 
 class FindingRead(BaseModel):
     id: str
-    audit_id: str
+    audit_id: int
     title: str
     description: str | None
     severity: str | None
@@ -38,6 +38,8 @@ class FindingRead(BaseModel):
     action_description: str | None
     action_due_date: date | None
     action_status: str | None
+    created_at: str | None
+    updated_at: str | None
 
     class Config:
         from_attributes = True
@@ -52,7 +54,7 @@ router = APIRouter(prefix="/findings", tags=["findings"])
     status_code=status.HTTP_201_CREATED,
 )
 def create_finding(
-    audit_id: str,
+    audit_id: int,
     payload: FindingCreate,
     db: Session = Depends(get_db),
 ) -> AuditFinding:
@@ -75,7 +77,7 @@ def create_finding(
 
 @router.get("/audits/{audit_id}", response_model=List[FindingRead])
 def list_findings_for_audit(
-    audit_id: str,
+    audit_id: int,
     db: Session = Depends(get_db),
 ) -> List[AuditFinding]:
     audit = db.query(Audit).filter(Audit.id == audit_id).first()
@@ -112,7 +114,7 @@ def update_finding(
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
 
-    for field, value in payload.dict(exclude_unset=True).items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(finding, field, value)
 
     db.commit()
