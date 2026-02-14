@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.database import Audit, ChatSession, UploadedFile, get_db
-from app.services.pinecone_service import PineconeService
 
 from pypdf import PdfReader
 try:
@@ -26,7 +25,6 @@ os.makedirs(settings.upload_dir, exist_ok=True)
 def _extract_text_from_file(path: str, content_type: str, filename: str) -> str:
     text = ""
 
-    # Very simple heuristics
     if content_type == "application/pdf" or filename.lower().endswith(".pdf"):
         reader = PdfReader(path)
         parts = []
@@ -50,11 +48,10 @@ def _extract_text_from_file(path: str, content_type: str, filename: str) -> str:
         text = "\n".join(parts)
 
     else:
-        # Fallback: treat as plain text
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
-        except:
+        except Exception:
             text = ""
 
     return text
@@ -62,7 +59,7 @@ def _extract_text_from_file(path: str, content_type: str, filename: str) -> str:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_file(
-    audit_id: str = Form(...),
+    audit_id: int = Form(...),
     session_id: str | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -71,7 +68,7 @@ async def upload_file(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    # Session optional; falls nicht existiert, neue Session für dieses Audit
+    # Session optional
     session = None
     if session_id:
         session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
@@ -84,8 +81,8 @@ async def upload_file(
         db.commit()
         db.refresh(session)
 
-    # Speichern der Datei auf Storage
-    audit_dir = os.path.join(settings.upload_dir, audit.id)
+    # Datei speichern
+    audit_dir = os.path.join(settings.upload_dir, str(audit.id))
     os.makedirs(audit_dir, exist_ok=True)
 
     file_path = os.path.join(audit_dir, file.filename)
@@ -112,20 +109,6 @@ async def upload_file(
     db.commit()
     db.refresh(uploaded)
 
-    # Embeddings + Pinecone
-    try:
-        if settings.pinecone_api_key:
-            pinecone = PineconeService()
-            pinecone.upsert_document_chunks(
-                audit_id=audit.id,
-                file_id=uploaded.id,
-                filename=uploaded.filename,
-                text=uploaded.extracted_text or "",
-            )
-    except Exception:
-        # Für MVP: nicht hart failen, wenn Embedding fehlschlägt
-        pass
-
     return {
         "id": uploaded.id,
         "audit_id": uploaded.audit_id,
@@ -136,7 +119,7 @@ async def upload_file(
 
 @router.get("/audits/{audit_id}")
 def list_files_for_audit(
-    audit_id: str,
+    audit_id: int,
     db: Session = Depends(get_db),
 ):
     audit = db.query(Audit).filter(Audit.id == audit_id).first()
@@ -155,7 +138,24 @@ def list_files_for_audit(
             "id": f.id,
             "filename": f.filename,
             "content_type": f.content_type,
-            "created_at": f.created_at.isoformat(),
+            "created_at": f.created_at.isoformat() if f.created_at else None,
         }
         for f in files
     ]
+
+
+@router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_file(
+    file_id: str,
+    db: Session = Depends(get_db),
+):
+    uploaded = db.query(UploadedFile).filter(UploadedFile.id == file_id).first()
+    if not uploaded:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Datei vom Filesystem löschen
+    if uploaded.stored_path and os.path.exists(uploaded.stored_path):
+        os.remove(uploaded.stored_path)
+
+    db.delete(uploaded)
+    db.commit()

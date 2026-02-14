@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PlusCircle, Edit, X, FileText } from 'lucide-react';
-import type { Audit } from '../services/auditService';
+import type { Audit, AuditStatus } from '../services/auditService';
 import { createAudit, updateAudit } from '../services/auditService';
 
 interface AuditPanelProps {
@@ -10,6 +10,20 @@ interface AuditPanelProps {
     onAuditsChange: () => void;
 }
 
+const STATUS_LABELS: Record<AuditStatus, string> = {
+    PLANUNG: 'Planung',
+    DURCHFUEHRUNG: 'Durchführung',
+    BERICHTERSTATTUNG: 'Berichterstattung',
+    MASSNAHMENVERFOLGUNG: 'Maßnahmenverfolgung',
+};
+
+const STATUS_COLORS: Record<AuditStatus, string> = {
+    PLANUNG: 'bg-gray-100 text-gray-800',
+    DURCHFUEHRUNG: 'bg-yellow-100 text-yellow-800',
+    BERICHTERSTATTUNG: 'bg-blue-100 text-blue-800',
+    MASSNAHMENVERFOLGUNG: 'bg-green-100 text-green-800',
+};
+
 const AuditPanel: React.FC<AuditPanelProps> = ({
     audits,
     selectedAudit,
@@ -18,10 +32,10 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
 }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingAudit, setEditingAudit] = useState<Audit | null>(null);
-    const [formData, setFormData] = useState<{ title: string; description: string; status: string }>({
+    const [formData, setFormData] = useState<{ title: string; description: string; status: AuditStatus }>({
         title: '',
         description: '',
-        status: 'PLANNED'
+        status: 'PLANUNG'
     });
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -34,7 +48,7 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
             }
             setShowModal(false);
             setEditingAudit(null);
-            setFormData({ title: '', description: '', status: 'PLANNED' });
+            setFormData({ title: '', description: '', status: 'PLANUNG' });
             onAuditsChange();
         } catch (error) {
             console.error('Failed to save audit', error);
@@ -53,7 +67,7 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
 
     const openCreateModal = () => {
         setEditingAudit(null);
-        setFormData({ title: '', description: '', status: 'PLANNED' });
+        setFormData({ title: '', description: '', status: 'PLANUNG' });
         setShowModal(true);
     };
 
@@ -94,13 +108,8 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
                                     <p className="text-sm text-gray-600 line-clamp-2 mb-2">{audit.description}</p>
                                 )}
                                 <div className="flex items-center gap-2">
-                                    <span className={`
-                                        px-2 py-1 text-xs rounded-full font-medium
-                                        ${audit.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                            audit.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-gray-100 text-gray-800'}
-                                    `}>
-                                        {audit.status}
+                                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${STATUS_COLORS[audit.status] || 'bg-gray-100 text-gray-800'}`}>
+                                        {STATUS_LABELS[audit.status] || audit.status}
                                     </span>
                                     <span className="text-xs text-gray-500">#{audit.id}</span>
                                 </div>
@@ -159,12 +168,13 @@ const AuditPanel: React.FC<AuditPanelProps> = ({
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                                     <select
                                         value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, status: e.target.value as AuditStatus })}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
-                                        <option value="PLANNED">PLANNED</option>
-                                        <option value="IN_PROGRESS">IN_PROGRESS</option>
-                                        <option value="COMPLETED">COMPLETED</option>
+                                        <option value="PLANUNG">Planung</option>
+                                        <option value="DURCHFUEHRUNG">Durchführung</option>
+                                        <option value="BERICHTERSTATTUNG">Berichterstattung</option>
+                                        <option value="MASSNAHMENVERFOLGUNG">Maßnahmenverfolgung</option>
                                     </select>
                                 </div>
                             )}

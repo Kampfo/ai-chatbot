@@ -1,4 +1,5 @@
 from typing import List
+from datetime import date
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,11 +20,23 @@ class AuditStatus(str, Enum):
 class AuditCreate(BaseModel):
     title: str
     description: str | None = None
+    audit_type: str | None = None
+    scope: str | None = None
+    objectives: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    responsible_person: str | None = None
 
 
 class AuditUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+    audit_type: str | None = None
+    scope: str | None = None
+    objectives: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    responsible_person: str | None = None
 
 
 class AuditStatusUpdate(BaseModel):
@@ -31,10 +44,16 @@ class AuditStatusUpdate(BaseModel):
 
 
 class AuditRead(BaseModel):
-    id: str
+    id: int
     title: str
     description: str | None
-    status: AuditStatus
+    status: str
+    audit_type: str | None = None
+    scope: str | None = None
+    objectives: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    responsible_person: str | None = None
     created_at: str
     updated_at: str | None
 
@@ -51,6 +70,12 @@ def create_audit(payload: AuditCreate, db: Session = Depends(get_db)) -> Audit:
         title=payload.title,
         description=payload.description,
         status=AuditStatus.PLANUNG.value,
+        audit_type=payload.audit_type,
+        scope=payload.scope,
+        objectives=payload.objectives,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        responsible_person=payload.responsible_person,
     )
     db.add(audit)
     db.commit()
@@ -65,7 +90,7 @@ def list_audits(db: Session = Depends(get_db)) -> List[Audit]:
 
 
 @router.get("/{audit_id}", response_model=AuditRead)
-def get_audit(audit_id: str, db: Session = Depends(get_db)) -> Audit:
+def get_audit(audit_id: int, db: Session = Depends(get_db)) -> Audit:
     audit = db.query(Audit).filter(Audit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -74,7 +99,7 @@ def get_audit(audit_id: str, db: Session = Depends(get_db)) -> Audit:
 
 @router.patch("/{audit_id}", response_model=AuditRead)
 def update_audit(
-    audit_id: str,
+    audit_id: int,
     payload: AuditUpdate,
     db: Session = Depends(get_db),
 ) -> Audit:
@@ -82,10 +107,8 @@ def update_audit(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    if payload.title is not None:
-        audit.title = payload.title
-    if payload.description is not None:
-        audit.description = payload.description
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(audit, field, value)
 
     db.commit()
     db.refresh(audit)
@@ -94,7 +117,7 @@ def update_audit(
 
 @router.patch("/{audit_id}/status", response_model=AuditRead)
 def update_audit_status(
-    audit_id: str,
+    audit_id: int,
     payload: AuditStatusUpdate,
     db: Session = Depends(get_db),
 ) -> Audit:

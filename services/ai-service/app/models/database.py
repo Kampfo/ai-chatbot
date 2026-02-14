@@ -3,6 +3,7 @@ from datetime import datetime, date
 from uuid import uuid4
 
 from sqlalchemy import (
+    Boolean,
     Column,
     String,
     Text,
@@ -45,9 +46,19 @@ class Audit(Base):
         onupdate=func.now(),
     )
 
+    # Erweiterte Felder für Prüfungsplanung
+    audit_type = Column(String(64), nullable=True)  # COMPLIANCE, OPERATIONAL, FINANCIAL, IT
+    scope = Column(Text, nullable=True)  # Prüfungsumfang
+    objectives = Column(Text, nullable=True)  # Prüfungsziele
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    responsible_person = Column(String(255), nullable=True)  # Prüfungsleiter
+
     sessions = relationship("ChatSession", back_populates="audit", cascade="all, delete-orphan")
     documents = relationship("UploadedFile", back_populates="audit", cascade="all, delete-orphan")
     findings = relationship("AuditFinding", back_populates="audit", cascade="all, delete-orphan")
+    risks = relationship("Risk", back_populates="audit", cascade="all, delete-orphan")
+    plan_items = relationship("AuditPlanItem", back_populates="audit", cascade="all, delete-orphan")
 
 
 class ChatSession(Base):
@@ -116,6 +127,49 @@ class AuditFinding(Base):
     )
 
     audit = relationship("Audit", back_populates="findings")
+
+
+class Risk(Base):
+    __tablename__ = "risks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    impact = Column(String(32), nullable=True)  # HIGH, MEDIUM, LOW
+    likelihood = Column(String(32), nullable=True)  # HIGH, MEDIUM, LOW
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    audit = relationship("Audit", back_populates="risks")
+
+
+class AuditPlanItem(Base):
+    __tablename__ = "audit_plan_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("audits.id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String(64), nullable=True)  # VORBEREITUNG, PRUEFFELD, RISIKO
+    is_completed = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    due_date = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    audit = relationship("Audit", back_populates="plan_items")
+
+
+class DocumentAnalysis(Base):
+    __tablename__ = "document_analyses"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    file_id = Column(String, ForeignKey("uploaded_files.id"), nullable=False)
+    analysis_type = Column(String(64), nullable=False)  # RISK, SUMMARY, COMPLIANCE, CUSTOM
+    prompt = Column(Text, nullable=True)
+    result = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    file = relationship("UploadedFile")
 
 
 # --- Engine / Session ---
