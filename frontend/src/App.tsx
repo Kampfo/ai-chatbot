@@ -9,6 +9,7 @@ import ReportingPhase from './pages/ReportingPhase';
 import ActionTrackingPhase from './pages/ActionTrackingPhase';
 import DocumentsPage from './pages/DocumentsPage';
 import DashboardPage from './pages/DashboardPage';
+import ChatPage from './pages/ChatPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/audits" element={<AuditListPage />} />
           <Route path="/audits/:id" element={<AuditDetailPage />}>
             <Route index element={<Navigate to="planung" replace />} />

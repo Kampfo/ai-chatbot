@@ -1,5 +1,5 @@
 from typing import List
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -38,8 +38,8 @@ class FindingRead(BaseModel):
     action_description: str | None
     action_due_date: date | None
     action_status: str | None
-    created_at: str | None
-    updated_at: str | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
