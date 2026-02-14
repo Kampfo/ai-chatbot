@@ -4,7 +4,7 @@ import { Plus, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { Audit } from '../services/auditService';
 import { updateAuditStatus } from '../services/auditService';
 import { getFindings, createFinding, updateFinding } from '../services/findingService';
-import type { Finding, FindingCreate, FindingUpdate } from '../services/findingService';
+import type { Finding, FindingCreate } from '../services/findingService';
 
 interface AuditDetailContext {
     audit: Audit;

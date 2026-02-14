@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { FileText, LayoutDashboard } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 const navItems = [
     { to: '/audits', icon: FileText, label: 'Prüfungen' },

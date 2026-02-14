@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import type { Audit } from '../services/auditService';
-import { updateAuditStatus } from '../services/auditService';
 import { getFindings, updateFinding } from '../services/findingService';
 import type { Finding } from '../services/findingService';
 
@@ -11,14 +9,8 @@ interface AuditDetailContext {
     setAudit: (audit: Audit) => void;
 }
 
-const ACTION_STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-    OPEN: { label: 'Offen', color: 'bg-red-50 border-red-200', icon: AlertCircle },
-    IN_PROGRESS: { label: 'In Bearbeitung', color: 'bg-yellow-50 border-yellow-200', icon: Clock },
-    DONE: { label: 'Erledigt', color: 'bg-green-50 border-green-200', icon: CheckCircle },
-};
-
 const ActionTrackingPhase: React.FC = () => {
-    const { audit, setAudit } = useOutletContext<AuditDetailContext>();
+    const { audit } = useOutletContext<AuditDetailContext>();
     const [findings, setFindings] = useState<Finding[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -122,7 +114,6 @@ const ActionTrackingPhase: React.FC = () => {
             ) : (
                 <div className="space-y-3">
                     {findings.map((finding) => {
-                        const statusConfig = ACTION_STATUS_CONFIG[finding.action_status || 'OPEN'];
                         const isOverdue = finding.action_due_date && new Date(finding.action_due_date) < new Date() && finding.action_status !== 'DONE';
                         const isEditing = editingId === finding.id;
 
