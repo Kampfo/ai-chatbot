@@ -1,110 +1,97 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 import os
-import json
-import httpx
+
+from app.models.database import get_db, Audit
+from app.services.openai_service import OpenAIService
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
 
 class ChatRequest(BaseModel):
     audit_id: str | int | None = None
     message: str
     session_id: str | None = None
 
+
 @router.get("/test")
 async def test_endpoint():
-    """Test endpoint to verify service is running"""
     openai_key = os.getenv("OPENAI_API_KEY", "")
     return {
         "status": "ok",
         "service": "chat",
-        "openai_configured": bool(openai_key and len(openai_key) > 10)
+        "openai_configured": bool(openai_key and len(openai_key) > 10),
     }
 
+
 @router.post("")
-async def chat(payload: ChatRequest):
+async def chat(payload: ChatRequest, db: Session = Depends(get_db)):
     """
-    Ultra-simple chat using direct OpenAI API calls with httpx
+    RAG-enhanced chat: retrieves relevant document chunks from Weaviate,
+    includes chat history, and streams the OpenAI response.
     """
+    import json
+
     openai_api_key = os.getenv("OPENAI_API_KEY")
-    
     if not openai_api_key:
         async def error_stream():
             yield json.dumps({
                 "type": "metadata",
                 "session_id": "error",
-                "sources": []
+                "sources": [],
             }) + "\n"
             yield json.dumps({
                 "type": "content",
-                "chunk": "Fehler: OPENAI_API_KEY nicht konfiguriert."
+                "chunk": "Fehler: OPENAI_API_KEY nicht konfiguriert.",
             }) + "\n"
         return StreamingResponse(error_stream(), media_type="application/x-ndjson")
 
-    async def generate_response():
+    # Build audit context for the system prompt
+    audit_context = ""
+    audit_id_str = str(payload.audit_id) if payload.audit_id else "0"
+
+    if payload.audit_id:
         try:
-            # Send metadata first
+            audit_id_int = int(payload.audit_id)
+            audit = db.query(Audit).filter(Audit.id == audit_id_int).first()
+            if audit:
+                parts = [f"Prüfung: {audit.title}"]
+                if audit.audit_type:
+                    parts.append(f"Typ: {audit.audit_type}")
+                if audit.scope:
+                    parts.append(f"Umfang: {audit.scope}")
+                if audit.objectives:
+                    parts.append(f"Ziele: {audit.objectives}")
+                if audit.status:
+                    parts.append(f"Status: {audit.status}")
+                audit_context = "\n".join(parts)
+        except (ValueError, TypeError):
+            pass
+
+    try:
+        service = OpenAIService(audit_context=audit_context)
+    except RuntimeError:
+        async def error_stream():
             yield json.dumps({
                 "type": "metadata",
-                "session_id": str(payload.session_id or "new"),
-                "sources": []
+                "session_id": "error",
+                "sources": [],
             }) + "\n"
-
-            # Direct OpenAI API call
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {openai_api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "Du bist ein hilfreicher Assistent für interne Revision und Audit-Management."
-                            },
-                            {
-                                "role": "user",
-                                "content": payload.message
-                            }
-                        ],
-                        "stream": True
-                    },
-                    timeout=60.0
-                )
-                
-                # Stream the response
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # Remove "data: " prefix
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            data = json.loads(data_str)
-                            if "choices" in data and len(data["choices"]) > 0:
-                                delta = data["choices"][0].get("delta", {})
-                                content = delta.get("content")
-                                if content:
-                                    yield json.dumps({
-                                        "type": "content",
-                                        "chunk": content
-                                    }) + "\n"
-                        except json.JSONDecodeError:
-                            pass
-
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"Chat error: {error_details}")
             yield json.dumps({
                 "type": "content",
-                "chunk": f"\n\n[Fehler: {str(e)}]"
+                "chunk": "Fehler: OpenAI-Service konnte nicht initialisiert werden.",
             }) + "\n"
+        return StreamingResponse(error_stream(), media_type="application/x-ndjson")
 
-    return StreamingResponse(
-        generate_response(),
-        media_type="application/x-ndjson"
-    )
+    async def generate():
+        async for chunk in service.chat_stream(
+            db=db,
+            audit_id=audit_id_str,
+            session_id=payload.session_id,
+            user_message=payload.message,
+        ):
+            yield chunk
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
