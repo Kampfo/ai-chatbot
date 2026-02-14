@@ -1,5 +1,5 @@
 from typing import List
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -54,8 +54,8 @@ class AuditRead(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     responsible_person: str | None = None
-    created_at: str
-    updated_at: str | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

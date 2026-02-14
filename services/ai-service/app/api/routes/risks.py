@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -28,7 +29,7 @@ class RiskRead(BaseModel):
     description: str | None
     impact: str | None
     likelihood: str | None
-    created_at: str | None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True
